@@ -3,6 +3,7 @@ const path = require("path");
 const { validationResult } = require("express-validator");
 
 const Post = require("../models/post");
+const User = require("../models/user");
 
 const itemsPerPage = 2;
 
@@ -60,22 +61,33 @@ exports.createPost = (req, res, next) => {
   }
 
   const { title, content, imageUrl } = req.body;
+  let creator;
   const post = new Post({
     title,
     content,
     imageUrl: file.path,
-    creator: {
-      name: "Sviat M",
-    },
+    creator: req.userId,
   });
 
   return post
     .save()
     .then((newPost) => {
       console.log("POST_CREATED", newPost);
-      res.status(201).json({
+      return User.findById(req.userId);
+    })
+    .then((user) => {
+      creator = user;
+      user.posts.push(post);
+      return user.save();
+    })
+    .then((savedUser) => {
+      return res.status(201).json({
+        post,
         message: "Post created successfully!",
-        post: newPost,
+        creator: {
+          _id: creator._id,
+          name: creator.name,
+        },
       });
     })
     .catch((err) => {
@@ -130,6 +142,11 @@ exports.updatePost = (req, res, next) => {
       if (!post) {
         throw new Error("Post not found.");
       }
+      if (post.creator._id.toString() !== req.userId.toString()) {
+        const error = new Error("Not alowed to update.");
+        error.statusCode = 403;
+        throw error;
+      }
 
       return Post.findByIdAndUpdate(postId, payload, {
         returnDocument: "after",
@@ -161,14 +178,22 @@ exports.deletePost = (req, res, next) => {
       if (!post) {
         throw new Error("Post not found.");
       }
+
+      if (post.creator._id.toString() !== req.userId.toString()) {
+        const error = new Error("Not allowed to delete.");
+        error.statusCode = 403;
+        throw error;
+      }
+
       clearImage(post.imageUrl);
       return Post.findByIdAndDelete(postId);
     })
-    .then((deletedPost) =>
-      res
-        .status(200)
-        .json({ message: "Successfully deleted.", post: deletedPost })
-    )
+    .then((deletedPost) => User.findById(req.userId))
+    .then((user) => {
+      user.posts.pull(postId);
+      return user.save();
+    })
+    .then((user) => res.status(200).json({ message: "Successfully deleted." }))
     .catch((err) => {
       console.log("DELETE_POST_ERR", err);
       if (!err.statusCode) {
