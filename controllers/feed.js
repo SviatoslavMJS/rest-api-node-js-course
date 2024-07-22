@@ -4,21 +4,39 @@ const { validationResult } = require("express-validator");
 
 const Post = require("../models/post");
 
+const itemsPerPage = 2;
+
 const clearImage = (imageUrl) => {
   fs.unlink(path.join(__dirname, "..", imageUrl), (err) =>
-    console.log(err ? "FS_CLEAR_IMAGE_FAILED" : "FS_IMAGE_SUCCESSFULY_REMOVED")
+    console.log(
+      err
+        ? "FS_CLEAR_IMAGE_FAILED"
+        : "FS_IMAGE_SUCCESSFULY_REMOVED - " + imageUrl
+    )
   );
 };
 
 exports.getPosts = (req, res, next) => {
+  const page = req.query.page || 1;
+  let totalItems = 0;
+
   Post.find()
+    .countDocuments()
+    .then((count) => {
+      totalItems = count;
+      return Post.find()
+        .skip((page - 1) * itemsPerPage)
+        .limit(itemsPerPage);
+    })
     .then((posts) => {
       if (!posts) {
         const error = new Error("No posts found.");
         error.statusCode = 404;
         throw error;
       }
-      res.status(200).json({ message: "Success", posts: posts ?? [] });
+      res
+        .status(200)
+        .json({ message: "Success", posts: posts ?? [], totalItems });
     })
     .catch((err) => {
       console.log("GET_POSTS_ERR", err);
@@ -129,6 +147,30 @@ exports.updatePost = (req, res, next) => {
     })
     .catch((err) => {
       console.log("UPDATE_POST_ERR", err);
+      if (!err.statusCode) {
+        err.statusCode = 500;
+      }
+      next(err);
+    });
+};
+
+exports.deletePost = (req, res, next) => {
+  const { postId } = req.params;
+  Post.findById(postId)
+    .then((post) => {
+      if (!post) {
+        throw new Error("Post not found.");
+      }
+      clearImage(post.imageUrl);
+      return Post.findByIdAndDelete(postId);
+    })
+    .then((deletedPost) =>
+      res
+        .status(200)
+        .json({ message: "Successfully deleted.", post: deletedPost })
+    )
+    .catch((err) => {
+      console.log("DELETE_POST_ERR", err);
       if (!err.statusCode) {
         err.statusCode = 500;
       }
