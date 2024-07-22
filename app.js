@@ -7,6 +7,7 @@ const bodyParser = require("body-parser");
 require("@dotenvx/dotenvx").config();
 
 const feedRoutes = require("./routes/feed");
+const authRoutes = require("./routes/auth");
 
 const connectionUrl = process.env.NODE_MONGO_CONNECTION_URL;
 
@@ -47,11 +48,12 @@ app.use((req, res, next) => {
 });
 
 app.use("/feed", feedRoutes);
+app.use("/auth", authRoutes);
 
 app.use((error, req, res, next) => {
   console.log(error);
-  const { statusCode, message } = error;
-  return res.status(statusCode ?? 500).json({ message });
+  const { statusCode, message, data } = error;
+  return res.status(statusCode ?? 500).json({ message, data });
 });
 
 mongoose
