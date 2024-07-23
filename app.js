@@ -1,4 +1,5 @@
 const path = require("path");
+const { Server } = require("socket.io");
 const { v4: uuidv4 } = require("uuid");
 const express = require("express");
 const mongoose = require("mongoose");
@@ -58,8 +59,16 @@ app.use((error, req, res, next) => {
 
 mongoose
   .connect(connectionUrl)
-  .then(() => {
+  .then((result) => {
+    const httpServer = require("http").createServer(app);
+
+    const io = require("./socket").init(httpServer);
+
+    io.on("connection", (socket) => {
+      console.log("SOCKET_CONNECTED", socket.id);
+    });
+
+    httpServer.listen(8080);
     console.log("MONGODB_CONNECTED");
-    app.listen(8080);
   })
   .catch((err) => console.log("CONNECTION_ERR", err));

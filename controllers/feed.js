@@ -2,8 +2,10 @@ const fs = require("fs");
 const path = require("path");
 const { validationResult } = require("express-validator");
 
+const io = require("../socket");
 const Post = require("../models/post");
 const User = require("../models/user");
+const user = require("../models/user");
 
 const itemsPerPage = 2;
 
@@ -24,6 +26,7 @@ exports.getPosts = async (req, res, next) => {
 
     const posts = await Post.find()
       .populate("creator", "_id email name")
+      .sort({ createdAt: -1 })
       .skip((page - 1) * itemsPerPage)
       .limit(itemsPerPage);
 
@@ -73,6 +76,11 @@ exports.createPost = async (req, res, next) => {
 
     creator.posts.push(post);
     await creator.save();
+
+    io.getIO().emit("posts", {
+      action: "create",
+      post: { ...post._doc, creator: { _id: req.userId, name: creator.name } },
+    });
 
     res.status(201).json({
       post,
@@ -149,6 +157,11 @@ exports.updatePost = async (req, res, next) => {
     });
     console.log("POST_UPDATED", newPost);
 
+    io.getIO().emit("posts", {
+      action: "update",
+      post: newPost,
+    });
+
     res.status(201).json({
       message: "Post updated successfully!",
       post: newPost,
@@ -183,6 +196,10 @@ exports.deletePost = async (req, res, next) => {
 
     clearImage(post.imageUrl);
     await Post.findByIdAndDelete(postId);
+    io.getIO().emit("posts", {
+      action: "delete",
+      postId,
+    });
     const user = await User.findById(req.userId);
 
     user.posts.pull(postId);
