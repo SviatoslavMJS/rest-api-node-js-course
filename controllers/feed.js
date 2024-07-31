@@ -74,10 +74,10 @@ exports.createPost = async (req, res, next) => {
 
     const creator = await User.findById(req.userId);
 
-    creator.posts.push(post);
-    await creator.save();
+    creator.posts.push(post._id);
+    const user = await creator.save({ returnDocument: "after" });
 
-    io.getIO().emit("posts", {
+    io.getIO()?.emit("posts", {
       action: "create",
       post: { ...post._doc, creator: { _id: req.userId, name: creator.name } },
     });
@@ -90,12 +90,15 @@ exports.createPost = async (req, res, next) => {
         name: creator.name,
       },
     });
+
+    return { user, post: newPost };
   } catch (err) {
     console.log("CREATE_POST_ERR", err);
     if (!err.statusCode) {
       err.statusCode = 500;
     }
     next(err);
+    return err;
   }
 };
 
